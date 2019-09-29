@@ -1,0 +1,422 @@
+'''
+Created on Jul 5, 2019
+
+@author: gennie
+
+
+'''
+import sqlite3
+import os
+from _overlapped import NULL
+import re
+
+# creates a connection to the SQLite Database
+bikesdb = sqlite3.connect('C:\\Users\\genni\\OneDrive\\Desktop\\sqlite-tools-win32-x86-3280000\\sqlite-tools-win32-x86-3280000\\Bikes.DB')
+
+# deleting existing data that is already in the database so that we can start with a clear table
+bikesdb.execute("DELETE FROM Charging;")
+bikesdb.execute("DELETE FROM DeBug;")
+bikesdb.execute("DELETE FROM Disarmed;")
+bikesdb.execute("DELETE FROM Events;")
+bikesdb.execute("DELETE FROM Info;")
+bikesdb.execute("DELETE FROM Key;")
+bikesdb.execute("DELETE FROM Motorcycle;")
+bikesdb.execute("DELETE FROM PowerSwitch;")
+bikesdb.execute("DELETE FROM Riding;")
+bikesdb.execute("DELETE FROM SevCon;")
+bikesdb.commit()
+
+# # takes a data file name from the user 
+# from pip._vendor.distlib.compat import raw_input
+# print("Please input a Folder Name.")  # prompts the user to input a data file name 
+# zeroFolder = raw_input("Folder Name: ")
+# 
+# zeroFolders = 'C:\\Users\\genni\\OneDrive\\Desktop\\ZeroMotorcycleDataFiles'
+#     
+# with open(zeroFolders) as folder:
+#     folderlist = folder.read()
+# print(folderlist)
+# # zeroFile ='C:\Users\genni\OneDrive\Desktop\AtomZeroData_2019'
+# with open(zeroFolder) as data:
+# # for line in data: #this reads in each line of the data file and stores it in a list    
+#     dataList = data.readlines()
+
+# takes a data folder name from the user 
+from pip._vendor.distlib.compat import raw_input
+print("Please input a Folder Name.")  # prompts the user to input a data file name 
+dataFolder = raw_input('Folder Name: ')
+
+#finds the location of the file on the computer 
+filelocation = os.chdir(dataFolder)
+files = os.listdir(filelocation)
+name = os.getcwd()
+number = 0
+rideNum = 0
+number2 = 0
+chargeNum = 0
+
+#traverses through the files in order to get all of the data 
+for file in files:
+    if 'desktop.ini' in files:
+        files.remove('desktop.ini')
+    with open(file) as data:
+        # for line in data: #this reads in each line of the data file and stores it in a list    
+        dataList = data.readlines()
+        # This is the section that loops through the data in order to find the model, 
+        # and the vin that we are going to have for the rest of the database population 
+        for index, line in enumerate(dataList):  # loops through the list
+            if index == 3:  # finds the line that has the Model and Vin 
+                parts = line.split(',')
+                for index, section in enumerate(parts):
+                    # isolates data for the Model type
+                    if index == 2:  # specifies the Model 
+                        year = section.split()
+                        year = str(year[2])
+                    # isolates data for the VIN number
+                    if index == 4:  # specifies the VIN
+                        rideNum = 0
+                        chargeNum = 0
+                        vin = section.split()
+                        vin = str(vin[1])
+                      
+                        bikesdb.execute("INSERT INTO Motorcycle (Vin, Model) VALUES (?,?)", (vin, year,))
+            # This is the section that goes through the rest of the data and populates the 
+            # the database with all of the events and their respective conditions
+            if index >= 9 and index <= len(dataList):
+                parts = line.split()
+                if len(parts)== 0:
+                    break
+                # isolates data for the entry ID
+                entryID = parts[0]
+                #THIS IS A CHECK FOR THE ENTRYID DATA
+#                 check = re.match('\d', entryID)
+#                 if not check:
+#                     print(entryID)
+                # isolates data for the date and time
+                date = parts[1]
+                #THIS IS A CHECK FOR THE DATE DATA
+                check = re.match('\d{1,2}\/\d{1,2}\/\d{4}', date)
+                if not check:
+#                 if date == '0' or date == '1' or date == '2' or date == '3':
+                    times = parts[1]
+                    #THIS IS A CHECK FOR THE TIME DATA
+#                     check = re.match('\d{2}\:\d{2}\:\d{2}', times)
+#                     if not check:
+#                         print(times)
+                    event = parts [2]
+                else:
+                    times = parts[2]
+#                     #THIS IS A CHECK FOR THE TIME DATA
+#                     check = re.match('\d{2}\:\d{2}\:\d{2}', times)
+#                     if not check:
+#                         print(times)
+                    event = parts[3]
+                    # inserting all of this data into the Events database       
+                bikesdb.execute("INSERT INTO Events (Vin, EntryID, date, time, event) VALUES (?,?,?,?,?)", (vin, entryID, date, times, event))
+                # deals with all of the Riding events and puts them into a specifically designed database
+                if event == 'Riding':
+                    number2 = 0
+                    number = number + 1
+                    if number == 1:
+                        rideNum = rideNum + 1
+                    # making a standard format for all the strings by getting rid of irregular spacing 
+                    eventSpec = parts[3:len(parts)]  # this is making the portion from the event on, a different list
+                    eventSpec = ' '.join(eventSpec)
+                    eventSpec = eventSpec.replace(' ', '')
+                    eventSpec = eventSpec.split(',')
+                    # isolating high pack temp data
+                    packTempH = eventSpec[0].split('h')
+                    packTempH = packTempH[1].replace('C', '')
+                    #THIS IS A CHECK FOR HIGH PACK TEMP
+#                     check = re.match('\d', packTempH)
+#                     if not check:
+#                         print(packTempH)
+                    # isolating low pack temp data
+                    packTempL = eventSpec[1].replace('C', '').replace('l', '')
+                    #THIS IS A CHECK FOR LOW PACK TEMP
+#                     check = re.match('\d', packTempL)
+#                     if not check:
+#                         print(packTempL)
+                    # isolating packSOC data
+                    packSOC = eventSpec[2].split(':')
+                    packSOC = packSOC[1].replace('%', '')
+                    #THIS IS A CHECK FOR THE PACKSOC
+#                     check = re.match('\d', packSOC)
+#                     if not check:
+#                         print(packSOC)
+                    # isolating Vpack data 
+                    vPack = eventSpec[3].split(':')
+                    vPack = vPack[1].replace('V', '')
+                    #THIS IS A CHECK FOR THE VPACK
+#                     check = re.match('\d{2,3}', vPack)
+#                     if not check:
+#                         print(vPack)
+                    # isolating MotAmps data
+                    motAmps = eventSpec[4].split(':')
+                    motAmps = motAmps[1]
+                    #THIS IS A CHECK FOR THE MOTAMPS
+#                     check = re.match('\d', motAmps)
+#                     if not check:
+#                         print(motAmps)
+                    # isolating BattAmps data
+                    battAmps = eventSpec[5].split(':')
+                    battAmps = battAmps[1]
+                    #THIS IS A CHECK FOR THE BATTAMPS
+#                     check = re.match('\d', battAmps)
+#                     if not check:
+#                         print(battAmps)
+                    # isolating Mods data
+                    mods = eventSpec[6].split(':')
+                    mods = mods[1]
+                    #THIS IS A CHECK FOR THE MODS DATA
+#                     check = re.match('\d', mods)
+#                     if not check:
+#                         print(mods)
+                    # isolating MotTemp data
+                    motTemp = eventSpec[7].split(':')
+                    motTemp = motTemp[1].replace('C', '')
+                    #THIS IS A CHECK FOR THE MOTEMP DATA
+#                     check = re.match('\d', motTemp)
+#                     if not check:
+#                         print(motTemp)
+                    # isolating CtrlTemp data
+                    ctrlTemp = eventSpec[8].split(':')
+                    ctrlTemp = ctrlTemp[1].replace('C', '')
+                    #THIS IS A CHECK FOR THE MOTTEMP DATA
+#                     check = re.match('\d', motTemp)
+#                     if not check:
+#                         print(motTemp)
+                    # isolating AmbTemp data
+                    ambTemp = eventSpec[9].split(':')
+                    ambTemp = ambTemp[1].replace('C', '')
+                    #THIS IS A CHECK FOR THE AMBTEMP
+#                     check = re.match('\d', ambTemp)
+#                     if not check:
+#                         print(ambTemp)
+                    # isolating MotRPM data
+                    motRPM = eventSpec[10].split(':')
+                    motRPM = motRPM[1]
+                    #THIS IS A CHECK FOR THE MOTRPM DATA
+#                     check = re.match('\d', motRPM)
+#                     if not check:
+#                         print(motRPM)
+                    # isolating Odometer data
+                    odo = eventSpec[11].split(':')
+                    odo = odo[1].replace('km', '')
+                    #THIS IS A CHECK FOR THE ODOMETER DATA
+#                     check = re.match('\d', odo)
+#                     if not check:
+#                         print(odo)
+                    # isolating Current Limit data
+                    if len(eventSpec) == 12:
+                        currLimit = NULL
+                        minCell = NULL
+                    else:
+                        currLimit = eventSpec[12].split('(')
+                        currLimit = currLimit[1].replace('%', '').replace(')', '')
+                        # isolating Min cell data
+                        minCell = eventSpec[13].split(':')
+                        minCell = minCell[1].replace('mV', '')
+                    #THIS IS A CHECK FOR THE CURRENTLIMIT DATA
+#                     check = re.match('\d', currLimit)
+#                     if not check:
+#                         print(currLimit)
+#                     check = re.match('\d', minCell)
+#                     if not check:
+#                         print(minCell)
+                        # inserting all of this data into the Riding database
+                    bikesdb.execute("INSERT INTO Riding (Vin, EntryID, PackTempH, PackTempL, PackSOC, VPack, MotAmps, BattAmps, Mods, MotTemp, CtrlTemp, AmbTemp, MotRPM, Odo, CurrLimit, MinCell, Sequence, RideNum) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, ?)", (vin, entryID, packTempH, packTempL, packSOC, vPack, motAmps, battAmps, mods, motTemp, ctrlTemp, ambTemp, motRPM, odo, currLimit, minCell, number, rideNum))
+                # deals with all of the Charging events and puts them into a specifically designed database         
+                if event == 'Charging':
+                    number = 0
+                    number2 = number2 + 1
+                    if number2 == 1:
+                        chargeNum = chargeNum + 1
+                    # making a standard format for all the strings by getting rid of irregular spacing 
+                    eventSpec = parts[3:len(parts)]  # this is making the portion from the event on, a different list
+                    eventSpec = ' '.join(eventSpec)
+                    eventSpec = eventSpec.replace(' ', '')
+                    eventSpec = eventSpec.split(',')
+                    # isolating high pack temp data
+                    packTempH = eventSpec[0].split(':')
+                    packTempH = packTempH[1].replace('C', '').replace('h', '')
+                    #THIS IS A CHECK FOR HIGH PACK TEMP
+#                     check = re.match('\d', packTempH)
+#                     if not check:
+#                         print(packTempH)
+                    # isolating low pack temp data
+                    packTempL = eventSpec[1].replace('C', '').replace('l', '')
+                    #THIS IS A CHECK FOR LOW PACK TEMP
+#                     check = re.match('\d', packTempL)
+#                     if not check:
+#                         print(packTempL)
+                    # isolating AmbTemp data
+                    ambTemp = eventSpec[2].split(':')
+                    ambTemp = ambTemp[1].replace('C', '')
+                    #THIS IS A CHECK FOR THE AMBTEMP
+#                     check = re.match('\d', ambTemp)
+#                     if not check:
+#                         print(ambTemp)
+                    # isolating packSOC data
+                    packSOC = eventSpec[3].split(':')
+                    packSOC = packSOC[1].replace('%', '')
+                    #THIS IS A CHECK FOR THE PACKSOC
+#                     check = re.match('\d', packSOC)
+#                     if not check:
+#                         print(packSOC)
+                    # isolating Vpack data 
+                    vPack = eventSpec[4].split(':')
+                    vPack = vPack[1].replace('V', '')
+                    #THIS IS A CHECK FOR THE VPACK
+#                     check = re.match('\d{2,3}', vPack)
+#                     if not check:
+#                         print(vPack)
+                    # isolating BattAmps data
+                    battAmps = eventSpec[5].split(':')
+                    battAmps = battAmps[1]
+                    #THIS IS A CHECK FOR THE BATTAMPS
+#                     check = re.match('\d', battAmps)
+#                     if not check:
+#                         print(battAmps)
+                    # isolating Mods data
+                    mods = eventSpec[6].split(':')
+                    mods = mods[1]
+                    #THIS IS A CHECK FOR THE MODS DATA
+#                     check = re.match('\d', mods)
+#                     if not check:
+#                         print(mods)
+                    # isolating MbbChgEn data
+                    mbb = eventSpec[7].split(':')
+                    mbb = mbb[1]
+#                     #THIS IS A CHECK FOR THE MBB DATA
+#                     check = re.match('\w', mbb)
+#                     if not check:
+#                         print(mbb)
+                    # isolating BmsChgEn data
+                    bms = eventSpec[8].split(':')
+                    bms = bms[1]
+                    #THIS IS A CHECK FOR THE BMS DATA
+#                     check = re.match('\w', bms)
+#                     if not check:
+#                         print(bms)
+                    # inserting all of this data into the Charging database
+                    bikesdb.execute("INSERT INTO Charging (Vin, EntryID, PackTempH, PackTempL, AmbTemp, PackSOC, VPack, BattAmps, Mods, MbbChgEn, BmsChgEn, Sequence, ChargeNum) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", (vin, entryID, packTempH, packTempL, ambTemp, packSOC, vPack, battAmps, mods, mbb, bms, number2, chargeNum))
+                # deals with all of the debug events and puts them into a specifically designed database  
+                if event == 'DEBUG:': 
+                    number = 0
+                    number2 = 0
+                    if date == '0' or date == '1':
+                        condition = parts[3:]
+                        condition = ' '.join(condition)
+                    else:
+                        condition = parts[4:]
+                        condition = ' '.join(condition)        
+                # inserting all of this data into the DeBug database
+                    bikesdb.execute("INSERT INTO DeBug (Vin, EntryID, condition) VALUES (?,?,?)", (vin, entryID, condition))
+                # deals with all of the sevcon events and puts them into a specifically designed database 
+                if event == 'Sevcon':
+                    number = 0
+                    number2 = 0
+                    condition = parts[4:]
+                    condition = ' '.join(condition)
+                    # inserting all of this data into the SevCon database
+                    bikesdb.execute("INSERT INTO Sevcon (Vin, EntryID, condition) VALUES (?,?,?)", (vin, entryID, condition))
+                # deals with all of the info events and puts them into a specifically designed database
+                if event == 'INFO:':
+                    number = 0
+                    number2 = 0
+                    condition = parts[4:]
+                    condition = ' '.join(condition)
+                    # inserting all of this data into the Info database
+                    bikesdb.execute("INSERT INTO Info (Vin, EntryID, condition) VALUES (?,?,?)", (vin, entryID, condition))         
+                # deals with all of the Power events and puts them into a specifically designed database
+                if event == 'Power':
+                    number = 0
+                    number2 = 0
+                    if date == '0' or date == '1':
+                        switch = parts[3]
+                        condition = parts[4:]
+                        condition = ' '.join(condition)
+                    else:
+                        switch = parts[4]
+                        condition = parts[5:]
+                        condition = ' '.join(condition)
+                    # inserting all of this data into the PowerSwitch database
+                    bikesdb.execute("INSERT INTO PowerSwitch (Vin, EntryID, OnOff, condition) VALUES (?,?,?,?)", (vin, entryID, switch, condition))
+                # deals with all of the Disarmed events and puts them into a specifically designed database   
+                if event == 'Disarmed':
+                    number = 0
+                    number2 = 0
+                    # making a standard format for all the strings by getting rid of irregular spacing 
+                    eventSpec = parts[3:len(parts)]  # this is making the portion from the event on, a different list
+                    eventSpec = ' '.join(eventSpec)
+                    eventSpec = eventSpec.replace(' ', '')
+                    eventSpec = eventSpec.split(',')
+                    # isolating high pack temp data
+                    packTempH = eventSpec[0].split('h')
+                    packTempH = packTempH[1].replace('C', '')
+                    # isolating low pack temp data
+                    packTempL = eventSpec[1].replace('C', '').replace('l', '')
+                    # isolating packSOC data
+                    packSOC = eventSpec[2].split(':')
+                    packSOC = packSOC[1].replace('%', '')
+                    # isolating Vpack data 
+                    vPack = eventSpec[3].split(':')
+                    vPack = vPack[1].replace('V', '')
+                    # isolating MotAmps data
+                    motAmps = eventSpec[4].split(':')
+                    motAmps = motAmps[1]
+                    # isolating BattAmps data
+                    battAmps = eventSpec[5].split(':')
+                    battAmps = battAmps[1]
+                    # isolating Mods data
+                    mods = eventSpec[6].split(':')
+                    mods = mods[1]
+                    # isolating MotTemp data
+                    motTemp = eventSpec[7].split(':')
+                    motTemp = motTemp[1].replace('C', '')
+                    # isolating CtrlTemp data
+                    ctrlTemp = eventSpec[8].split(':')
+                    ctrlTemp = ctrlTemp[1].replace('C', '')
+                    # isolating AmbTemp data
+                    ambTemp = eventSpec[9].split(':')
+                    ambTemp = ambTemp[1].replace('C', '')
+                    # isolating MotRPM data
+                    motRPM = eventSpec[10].split(':')
+                    motRPM = motRPM[1]
+                    # isolating Odometer data
+                    odo = eventSpec[11].split(':')
+                    odo = odo[1].replace('km', '')
+                    # isolating Current Limit data
+                    if len(eventSpec) == 12:
+                        currLimit = NULL
+                        minCell = NULL
+                    else:
+                        currLimit = eventSpec[12].split('(')
+                        currLimit = currLimit[1].replace('%', '').replace(')', '')
+                        # isolating Min cell data
+                        minCell = eventSpec[13].split(':')
+                        minCell = minCell[1].replace('mV', '')
+                    # inserting all of this data into the Disarmed database
+                    bikesdb.execute("INSERT INTO Disarmed (Vin, EntryID, PackTempH, PackTempL, PackSOC, VPack, MotAmps, BattAmps, Mods, MotTemp, CtrlTemp, AmbTemp, MotRPM, Odo, CurrLimit, MinCell) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (vin, entryID, packTempH, packTempL, packSOC, vPack, motAmps, battAmps, mods, motTemp, ctrlTemp, ambTemp, motRPM, odo, currLimit, minCell)) 
+                # deals with all of the key events and puts them into a specifically designed database       
+                if event == 'Key':
+                    number = 0
+                    number2 = 0
+                    check = re.match('\d{1,2}\/\d{1,2}\/\d{4}', date)
+                    if not check:
+                        switch = parts[3]
+                    #THIS IS A CHECK FOR THE SWITCH DATA
+#                         check2 = re.match('\w', switch)
+#                         if not check2:
+#                             print(switch)
+                    else:
+                        switch = parts[4]
+                        #THIS IS A CHECK FOR THE SWITCH DATA
+#                         check = re.match('\w', switch)
+#                         if not check:
+#                             print(switch)
+                    # inserting all of this data into the Key database
+                    bikesdb.execute("INSERT INTO Key (Vin, EntryID, OnOff) VALUES (?,?,?)", (vin, entryID, switch))
+bikesdb.commit() 
+
